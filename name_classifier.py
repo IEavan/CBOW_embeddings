@@ -10,6 +10,8 @@ from torch.autograd import Variable
 allowed_chars = string.ascii_letters + " .,;'"
 n_chars = len(allowed_chars)
 n_hidden = 128
+training_iterations = 10000
+print_every = 500
 
 # Converts unicode strings into strings containing only ascii
 # Characters. Accented letters will have their accents
@@ -90,16 +92,9 @@ class RNN(torch.nn.Module):
        return Variable(torch.zeros(1, self.hidden_size))
 
 
-#____________________________________________________________
-
+# Model initialization
 model = RNN(n_chars, n_hidden, n_categories)
 
-# name = "Johnny"
-# var = name_to_variable(name)
-# hidden = model.init_hidden()
-# out, next_hidden = model(var[0], hidden)
-# print(out)
-# print(probs_to_category(out))
 
 def get_random_example():
    rand_category_index = random.randint(0, n_categories - 1)
@@ -111,28 +106,51 @@ def get_random_example():
 criterion = torch.nn.NLLLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
 
-def train():
-    line, category, category_index = get_random_example()
+def train(line, category, category_index):
+    # Convert name to torch variable
     line = name_to_variable(line)
     
+    # Reset gradient buffers and initialize the model hidden state
     optimizer.zero_grad()
     hidden = model.init_hidden()
 
+    # Loop over all characters in the name
+    # Passing the updated hidden states through
     for i in range(line.size()[0]):
         out, hidden = model(line[i], hidden)
 
+    # Convert negative log probabilities to a category
     predicted_category, p_cat_index = probs_to_category(out)
 
+    # Calculate cross entropy loss and backpropagate
+    # Use gradients to update parameters according to Adam optimizer
     loss = criterion(out, Variable(torch.LongTensor([category_index]))) 
     loss.backward()
     optimizer.step()
 
     return predicted_category, loss.data[0]
 
-for epoch in range(100):
-    error = 0
-    for i in range(100):
-        _, err = train()
-        error += err
+def predict(name):
+    name_var = name_to_variable(name)
+    hidden = model.init_hidden()
 
-    print(error / 100)
+    for i in range(name_var.size()[0]):
+        out, hidden = model(name_var[i], hidden)
+
+    predicted_category, _ = probs_to_category(out)
+    return predicted_category
+
+# Training loop
+for iterations in range(training_iterations):
+    error_accumulator = 0
+    line, category, category_index = get_random_example()
+    predicted, example_loss = train(line, category, category_index)
+    error_accumulator += example_loss
+
+    if iterations % print_every is 0:
+        print("Current average training error is {}".format(error_accumulator / 100))
+        error_accumulator = 0
+        print("{}/{} predicted as {}\n".format(category, line, predicted))
+
+# Example test case
+print("Eavan predicted as {}".format(predict("Eavan")))
