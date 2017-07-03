@@ -1,5 +1,4 @@
 # TODO: 
-# Define model
 # Write training loop
 # Write evaluation and testing scripts
 
@@ -16,6 +15,7 @@ from torch.autograd import Variable
 allowed_chars = string.ascii_letters + " .,;'"
 n_chars = len(allowed_chars)
 n_hidden = 128
+learning_rate = 0.0005
 training_iterations = 10000
 print_every = 500
 
@@ -68,6 +68,18 @@ def name_to_variable(name):
         one_hot_tensor[i][0][index] = 1
     return Variable(one_hot_tensor)
 
+def category_to_variable(category):
+    one_hot_tensor = torch.zeros(1, n_categories)
+    
+    if type(category) is int:
+        one_hot_tensor[0][category_index] = 1
+    elif type(category) is str:
+        index = categories.index(category)
+        one_hot_tensor[0][index] = 1
+    
+    return Variable(one_hot_tensor)
+
+
 # Define Generative Model
 class Generator(torch.nn.Module):
     def __init__(self, input_size, hidden_size, output_size, drop_probability=0.1):
@@ -75,7 +87,7 @@ class Generator(torch.nn.Module):
         self.hidden_size = hidden_size
 
         # parameters
-        self.c2i = torch.nn.Linear(input_size + hidden_size + n_catagories, output_size)
+        self.c2i = torch.nn.Linear(input_size + hidden_size + n_categories, output_size)
         self.c2h = torch.nn.Linear(input_size + hidden_size + n_categories, hidden_size)
         self.i2o = torch.nn.Linear(output_size + hidden_size, output_size)
         # Read c2i as combined value to intermediate value;
@@ -103,3 +115,28 @@ class Generator(torch.nn.Module):
     def init_hidden(self):
         # Function to generate a hidden value with the correct dimensions
         return Variable(torch.zeros(1, self.hidden_size))
+
+# Training
+model = Generator(n_chars, n_hidden, n_chars)
+criterion = torch.nn.NLLLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+def get_random_example():
+   rand_category_index = random.randint(0, n_categories - 1)
+   category = categories[rand_category_index]
+   rand_line_index = random.randint(0, len(category) - 1)
+   line = category_lines[category][rand_line_index]
+   return line, category, rand_category_index
+
+for iteration in range(training_iterations):
+    # Get training example
+    line, category, category_index = get_random_example()
+
+    # Convert to torch.autograd variables
+    name_variable = name_to_variable(line)
+    category_variable = category_to_variable(category_index)
+
+    # Init a new blank hidden state for the model
+    hidden_state = model.init_hidden()
+
+
