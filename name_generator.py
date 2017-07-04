@@ -7,6 +7,7 @@ import glob
 import unicodedata
 import string
 import random
+from tqdm import *
 
 import torch
 from torch.autograd import Variable
@@ -16,8 +17,8 @@ allowed_chars = string.ascii_letters + " .,;'"
 n_chars = len(allowed_chars)
 n_hidden = 128
 learning_rate = 0.0005
-training_iterations = 1000
-print_every = 100
+training_iterations = 10000
+print_every = 1000
 
 # Converts unicode strings into strings containing only ascii
 # Characters. Accented letters will have their accents
@@ -135,7 +136,7 @@ def get_random_example():
    return line, category, rand_category_index
 
 loss_accumulator = 0
-for iteration in range(training_iterations):
+for iteration in tqdm(range(training_iterations)):
     # Get training example
     line, category, category_index = get_random_example()
 
@@ -156,7 +157,7 @@ for iteration in range(training_iterations):
 
     # Iteratate over the name, accumulating loss
     loss = 0
-    for i in range(target.size()[0]):
+    for i in range(len(target)):
         out, hidden_state = model(category_variable,
                                   name_variable[i],
                                   hidden_state)
@@ -174,3 +175,38 @@ for iteration in range(training_iterations):
         print("Current Training Loss is {}"
                 .format(loss_accumulator / print_every))
         loss_accumulator = 0
+
+# Test Generation
+def generate(category):
+    # Create start token
+    prev_char = letter_to_variable(";")
+
+    # Initialize a new hidden state
+    hidden_state = model.init_hidden()
+
+    # Transform inputs into torch autograd variables
+    category = category_to_variable(category)
+
+    # Iterate over results from model
+    result = ""
+    counter = 0
+    while True:
+        out, hidden_state = model(category, prev_char, hidden_state)
+        
+        char_index = torch.max(out, 1)[1].data[0][0]
+        char = allowed_chars[char_index]
+        prev_char = letter_to_variable(char)
+
+        if char is " " or counter > 20:
+            break
+        else:
+            result += char
+            counter += 1
+
+    return result
+
+print("Russian == {}".format(generate("Russian")))
+print("Arabic == {}".format(generate("Arabic")))
+print("Spanish == {}".format(generate("Spanish")))
+print("Polish == {}".format(generate("Polish")))
+print("German == {}".format(generate("German")))
