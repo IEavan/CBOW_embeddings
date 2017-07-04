@@ -16,8 +16,8 @@ allowed_chars = string.ascii_letters + " .,;'"
 n_chars = len(allowed_chars)
 n_hidden = 128
 learning_rate = 0.0005
-training_iterations = 10000
-print_every = 500
+training_iterations = 1000
+print_every = 100
 
 # Converts unicode strings into strings containing only ascii
 # Characters. Accented letters will have their accents
@@ -67,6 +67,12 @@ def name_to_variable(name):
         index = allowed_chars.find(name[i])
         one_hot_tensor[i][0][index] = 1
     return Variable(one_hot_tensor)
+
+def name_to_target(name):
+    name = name + " "
+    indicies = [allowed_chars.find(char) for char in name]
+    target = Variable(torch.LongTensor(indicies))
+    return target
 
 def category_to_variable(category):
     one_hot_tensor = torch.zeros(1, n_categories)
@@ -128,6 +134,7 @@ def get_random_example():
    line = category_lines[category][rand_line_index]
    return line, category, rand_category_index
 
+loss_accumulator = 0
 for iteration in range(training_iterations):
     # Get training example
     line, category, category_index = get_random_example()
@@ -135,8 +142,35 @@ for iteration in range(training_iterations):
     # Convert to torch.autograd variables
     name_variable = name_to_variable(line)
     category_variable = category_to_variable(category_index)
+    target = name_to_target(line)
+
+    # Append special start char to name
+    name_variable = torch.cat(
+            (
+                torch.unsqueeze(letter_to_variable(";"),0),
+                name_variable
+            ),0)
 
     # Init a new blank hidden state for the model
     hidden_state = model.init_hidden()
 
+    # Iteratate over the name, accumulating loss
+    loss = 0
+    for i in range(target.size()[0]):
+        out, hidden_state = model(category_variable,
+                                  name_variable[i],
+                                  hidden_state)
+        loss += criterion(out, target[i])
 
+    loss_accumulator += loss.data[0]
+
+    # Backprop
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()
+
+    # Print averaged loss
+    if (iteration + 1) % print_every is 0:
+        print("Current Training Loss is {}"
+                .format(loss_accumulator / print_every))
+        loss_accumulator = 0
