@@ -35,7 +35,7 @@ class RNN(torch.nn.Module):
 
 
 # Model initialization
-model = RNN(utils.N_CHARS, N_HIDDEN, utils.n_categories)
+model = RNN(utils.N_CHARS, N_HIDDEN, utils.N_CATEGORIES)
 criterion = torch.nn.NLLLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
