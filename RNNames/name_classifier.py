@@ -3,10 +3,10 @@ import torch
 from torch.autograd import Variable
 
 # Constants
-n_hidden = 128
-training_iterations = 5000
-print_every = 500
-learning_rate = 0.0005
+N_HIDDEN = 128
+TRAINING_ITERATIONS = 5000
+PRINT_EVERY = 500
+LEARNING_RATE = 0.0005
 
 
 #
@@ -35,9 +35,9 @@ class RNN(torch.nn.Module):
 
 
 # Model initialization
-model = RNN(utils.n_chars, n_hidden, utils.n_categories)
+model = RNN(utils.N_CHARS, N_HIDDEN, utils.n_categories)
 criterion = torch.nn.NLLLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 def train(line, category, category_index):
     # Convert name to torch variable
@@ -74,13 +74,13 @@ def predict(name):
     return predicted_category
 
 # Training loop
-for iterations in range(training_iterations):
+for iterations in range(TRAINING_ITERATIONS):
     error_accumulator = 0
     line, category, category_index = utils.get_random_example()
     predicted, example_loss = train(line, category, category_index)
     error_accumulator += example_loss
 
-    if iterations % print_every is 0:
+    if iterations % PRINT_EVERY is 0:
         print("Current average training error is {}".format(error_accumulator / 100))
         error_accumulator = 0
         print("{}/{} predicted as {}\n".format(category, line, predicted))

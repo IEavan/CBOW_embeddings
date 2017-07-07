@@ -5,10 +5,10 @@ import torch
 from torch.autograd import Variable
 
 # Constants
-n_hidden = 128
-learning_rate = 0.0005
-training_iterations = 5000
-print_every = 1000
+N_HIDDEN = 128
+LEARNING_RATE = 0.0005
+TRAINING_ITERATIONS = 10000
+PRINT_EVERY = 1000
 
 
 # Define Generative Model
@@ -18,8 +18,8 @@ class Generator(torch.nn.Module):
         self.hidden_size = hidden_size
 
         # parameters
-        self.c2i = torch.nn.Linear(input_size + hidden_size + utils.n_categories, output_size)
-        self.c2h = torch.nn.Linear(input_size + hidden_size + utils.n_categories, hidden_size)
+        self.c2i = torch.nn.Linear(input_size + hidden_size + utils.N_CATEGORIES, output_size)
+        self.c2h = torch.nn.Linear(input_size + hidden_size + utils.N_CATEGORIES, hidden_size)
         self.i2o = torch.nn.Linear(output_size + hidden_size, output_size)
         # Read c2i as combined value to intermediate value;
         #      c2h as combined value to hidden value
@@ -48,13 +48,13 @@ class Generator(torch.nn.Module):
         return Variable(torch.zeros(1, self.hidden_size))
 
 # Training
-model = Generator(utils.n_chars, n_hidden, utils.n_chars)
+model = Generator(utils.N_CHARS, N_HIDDEN, utils.N_CHARS)
 criterion = torch.nn.NLLLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 
 loss_accumulator = 0
-for iteration in tqdm(range(training_iterations)):
+for iteration in tqdm(range(TRAINING_ITERATIONS)):
     # Get training example
     line, category, category_index = utils.get_random_example()
 
@@ -89,9 +89,9 @@ for iteration in tqdm(range(training_iterations)):
     optimizer.zero_grad()
 
     # Print averaged loss
-    if (iteration + 1) % print_every is 0:
+    if (iteration + 1) % PRINT_EVERY is 0:
         print("Current Training Loss is {}"
-                .format(loss_accumulator / print_every))
+                .format(loss_accumulator / PRINT_EVERY))
         loss_accumulator = 0
 
 # Test Generation
@@ -112,7 +112,7 @@ def generate(category):
         out, hidden_state = model(category, prev_char, hidden_state)
         
         char_index = torch.max(out, 1)[1].data[0][0]
-        char = utils.allowed_chars[char_index]
+        char = utils.ALLOWED_CHARS[char_index]
         prev_char = utils.letter_to_variable(char)
 
         if char is " " or counter > 20:
