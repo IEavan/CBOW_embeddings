@@ -4,6 +4,7 @@ import string
 import random
 
 from torch import zeros, LongTensor
+from torch import max as tmax
 from torch.autograd import Variable
 
 # Required Constants
@@ -85,6 +86,12 @@ def category_to_variable(category):
         one_hot_tensor[0][index] = 1
     
     return Variable(one_hot_tensor)
+
+# Converts Log probabilities into a category
+def probs_to_category(probs):
+    probability, index = tmax(probs, 1)
+    category = categories[index.data[0][0]]
+    return category, index.data[0][0]
 
 # Extracts a random sample from the dataset
 def get_random_example():
