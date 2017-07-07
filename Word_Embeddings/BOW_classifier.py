@@ -9,7 +9,14 @@ EPOCHS = 100
 LEARNING_RATE = 3e-2
 
 # Open Count of Monte Cristo
-corpus = open(CORPUS_PATH, "r")
+try:
+    corpus = open(CORPUS_PATH, "r")
+except FileNotFoundError:
+    print("A Text corpus with the name {} was not found".format(CORPUS_PATH) +
+            " in the current working directory.\nPlease" +
+            " insert your own text file and change the" +
+            " CORPUS_PATH variable accordingly.")
+    exit()
 
 # Transform raw text into a list of labeled training examples
 word_to_index = {}
