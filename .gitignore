@@ -1,2 +1,3 @@
 *.swp
 name_data/*
+__pycache__/
