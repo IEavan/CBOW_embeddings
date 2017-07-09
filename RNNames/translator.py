@@ -163,3 +163,16 @@ class Decoder(torch.nn.Module):
     def init_hidden(self):
         hidden = Variable(torch.zeros(1,1,self.hidden_dims))
         return hidden
+
+# Data Preperation helper functions
+def sentence_to_indicies(sentence, lang):
+    return [lang.word2index(word) for word in sentence.split(" ")]
+
+def sentence_to_variable(sentence, lang):
+    indicies = sentence_to_indicies(sentence, lang)
+    variable = Varialbe(torch.LongTensor(indicies.append(EOS)))
+    return variable
+
+def prepare_pair(pair, input_lang, output_lang):
+    return (sentence_to_variable(pair[0], input_lang),
+            sentence_to_variable(pair[1], output_lang))
