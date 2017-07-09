@@ -98,4 +98,31 @@ for pair in pairs:
     input_lang.add_sentence(pair[0])
     output_lang.add_sentence(pair[1])
 
-print(pairs[:20])
+# print(pairs[:20])
+# print(input_lang.word2index["not"])
+# print(output_lang.word2index["mais"])
+
+# Define Encoder Network
+class Encoder(torch.nn.Module):
+    def __init__(self, input_dims, hidden_dims):
+        super(Encoder, self).__init__()
+
+        self.input_dims = input_dims
+        self.hidden_dims = hidden_dims
+        
+        # Input is one hot vector and can used as proxy for vocabulary
+        # Embedding dim is the same size as hidden dim
+        self.embeddings = torch.nn.Embedding(input_size, hidden_dims)
+
+        # GRU Input dim is the same size as the hidden dim
+        # since the embedding dim is the same as the hidden dim
+        self.gru = torch.nn.GRU(hidden_dims, hidden_dims)
+
+    def forward(self, word_var, prev_hidden):
+        embed = self.embeddings(word_var)
+        output, hidden = self.gru(embed, prev_hidden)
+        return output, hidden
+
+    def init_hidden(self):
+        hidden = torch.zeros(1, 1, self.hidden)
+        return Variable(hidden)
