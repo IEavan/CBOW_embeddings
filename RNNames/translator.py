@@ -126,3 +126,40 @@ class Encoder(torch.nn.Module):
     def init_hidden(self):
         hidden = torch.zeros(1, 1, self.hidden)
         return Variable(hidden)
+
+# Define Decoder Network (with attention)
+class Decoder(torch.nn.Module):
+    def __init__(self, output_dims, hidden_dims, max_length=20):
+        super(Decoder, self).__init__()
+
+        self.output_dims = output_dims
+        self.hidden_dims = hidden_dims
+        self.max_length  = max_length
+
+        # Output dims is proxy for output vocabulary
+        self.embedding = torch.nn.Embedding(output_dims, hidden_dim)
+        self.attention = torch.nn.Linear(hidden_dim * 2, max_length)
+        self.attention_combine = torch.nn.Linear(hidden_dim * 2, hidden_dim)
+        self.gru = torch.nn.GRU(hidden_dims, hidden_dims)
+        self.out = torch.nn.Linear(hidden_dims, output_dims)
+
+        self.logsoftmax = torch.nn.LogSoftmax()
+        self.softmax = torch.nn.softmax()
+        self.relu = torch.nn.ReLu()
+
+    def forward(self, prev_word, prev_hidden, encoder_outputs):
+        embedded = self.embedding(prev_word).view(1,1,-1)
+        attention_input = torch.cat((embedded[0], prev_hidden[0]), 1)
+        attention_weights = self.softmax(self.attention(attention_inputs))
+
+        focused_encoder_outputs = torch.bmm(attention_weights.unsqueeze(0),
+                                            encoder_outputs.unsqueeze(0))
+        gru_input = self.attention_combine(torch.cat((focused_encoder_outputs[0],
+                                                      embedded[0]), 1))
+        gru_output, hidden = self.gru(gru_input, prev_hidden)
+        probabilities = self.logsoftmax(self.out(gru_output))
+        return probabilities, hidden
+
+    def init_hidden(self):
+        hidden = Variable(torch.zeros(1,1,self.hidden_dims))
+        return hidden
