@@ -6,6 +6,8 @@ import torch
 from torch.autograd import Variable
 
 # Constants
+HIDDEN_DIMS = 256
+EPOCHS = 10
 PATH = "name_data/eng-fra.txt"
 ALLOWED_CHARS = string.ascii_letters + " ,.!?'"
 MAX_TRAINING_LENGTH = 10
@@ -104,10 +106,10 @@ for pair in pairs:
 
 # Define Encoder Network
 class Encoder(torch.nn.Module):
-    def __init__(self, input_dims, hidden_dims):
+    def __init__(self, input_size, hidden_dims):
         super(Encoder, self).__init__()
 
-        self.input_dims = input_dims
+        self.input_size = input_size
         self.hidden_dims = hidden_dims
         
         # Input is one hot vector and can used as proxy for vocabulary
@@ -119,12 +121,12 @@ class Encoder(torch.nn.Module):
         self.gru = torch.nn.GRU(hidden_dims, hidden_dims)
 
     def forward(self, word_var, prev_hidden):
-        embed = self.embeddings(word_var)
+        embed = self.embeddings(word_var).view(1,1,-1)
         output, hidden = self.gru(embed, prev_hidden)
         return output, hidden
 
     def init_hidden(self):
-        hidden = torch.zeros(1, 1, self.hidden)
+        hidden = torch.zeros(1, 1, self.hidden_dims)
         return Variable(hidden)
 
 # Define Decoder Network (with attention)
@@ -137,27 +139,27 @@ class Decoder(torch.nn.Module):
         self.max_length  = max_length
 
         # Output dims is proxy for output vocabulary
-        self.embedding = torch.nn.Embedding(output_dims, hidden_dim)
-        self.attention = torch.nn.Linear(hidden_dim * 2, max_length)
-        self.attention_combine = torch.nn.Linear(hidden_dim * 2, hidden_dim)
+        self.embedding = torch.nn.Embedding(output_dims, hidden_dims)
+        self.attention = torch.nn.Linear(hidden_dims * 2, max_length)
+        self.attention_combine = torch.nn.Linear(hidden_dims * 2, hidden_dims)
         self.gru = torch.nn.GRU(hidden_dims, hidden_dims)
         self.out = torch.nn.Linear(hidden_dims, output_dims)
 
         self.logsoftmax = torch.nn.LogSoftmax()
-        self.softmax = torch.nn.softmax()
-        self.relu = torch.nn.ReLu()
+        self.softmax = torch.nn.Softmax()
+        self.relu = torch.nn.ReLU()
 
     def forward(self, prev_word, prev_hidden, encoder_outputs):
         embedded = self.embedding(prev_word).view(1,1,-1)
         attention_input = torch.cat((embedded[0], prev_hidden[0]), 1)
-        attention_weights = self.softmax(self.attention(attention_inputs))
+        attention_weights = self.softmax(self.attention(attention_input))
 
         focused_encoder_outputs = torch.bmm(attention_weights.unsqueeze(0),
                                             encoder_outputs.unsqueeze(0))
         gru_input = self.attention_combine(torch.cat((focused_encoder_outputs[0],
-                                                      embedded[0]), 1))
+                                                      embedded[0]), 1)).unsqueeze(0)
         gru_output, hidden = self.gru(gru_input, prev_hidden)
-        probabilities = self.logsoftmax(self.out(gru_output))
+        probabilities = self.logsoftmax(self.out(gru_output[0]))
         return probabilities, hidden
 
     def init_hidden(self):
@@ -166,13 +168,64 @@ class Decoder(torch.nn.Module):
 
 # Data Preperation helper functions
 def sentence_to_indicies(sentence, lang):
-    return [lang.word2index(word) for word in sentence.split(" ")]
+    return [lang.word2index[word] for word in sentence.split(" ")]
 
 def sentence_to_variable(sentence, lang):
     indicies = sentence_to_indicies(sentence, lang)
-    variable = Varialbe(torch.LongTensor(indicies.append(EOS)))
+    indicies.append(EOS)
+    variable = Variable(torch.LongTensor(indicies))
     return variable
 
 def prepare_pair(pair, input_lang, output_lang):
     return (sentence_to_variable(pair[0], input_lang),
             sentence_to_variable(pair[1], output_lang))
+
+
+# Train Model
+def train(encoder, decoder,
+           encoder_optimizer, decoder_optimizer,
+           criterion, training_pair):
+
+    # Clear gradient buffers
+    encoder_optimizer.zero_grad()
+    decoder_optimizer.zero_grad()
+
+    # Establish tracking variables
+    encoder_outputs = Variable(torch.zeros(decoder.max_length, encoder.hidden_dims))
+    loss = 0
+
+    # Run Encoder
+    encoder_hidden = encoder.init_hidden()
+    for i, word in enumerate(training_pair[0]):
+        output, encoder_hidden = encoder(word, encoder_hidden)
+        encoder_outputs[i] = output[0][0]
+
+    # Run Decoder
+    decoder_hidden = decoder.init_hidden()
+    start_token = Variable(torch.LongTensor([SOS]))
+    prev_word = start_token
+
+    for i, word in enumerate(training_pair[1]):
+        output, decoder_hidden = decoder(prev_word, decoder_hidden, encoder_outputs)
+        _, max_index = torch.max(output, 1)
+        max_index = max_index.data[0][0]
+        prev_word = Variable(torch.LongTensor([max_index]))
+
+        loss += criterion(output, word)
+
+        if max_index is EOS:
+            break
+
+
+    loss.backward()
+    encoder_optimizer.step()
+    decoder_optimizer.step()
+
+encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
+decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
+criterion = torch.nn.NLLLoss()
+encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=0.0005)
+decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=0.0005)
+traing_pair = prepare_pair(pairs[5], input_lang, output_lang)
+
+train(encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, traing_pair)
