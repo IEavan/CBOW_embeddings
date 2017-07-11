@@ -7,7 +7,8 @@ from torch.autograd import Variable
 
 # Constants
 HIDDEN_DIMS = 256
-EPOCHS = 10
+EPOCHS = 1
+PRINT_EVERY = 10
 PATH = "name_data/eng-fra.txt"
 ALLOWED_CHARS = string.ascii_letters + " ,.!?'"
 MAX_TRAINING_LENGTH = 10
@@ -112,7 +113,7 @@ class Encoder(torch.nn.Module):
         self.input_size = input_size
         self.hidden_dims = hidden_dims
         
-        # Input is one hot vector and can used as proxy for vocabulary
+        # Input size is the size of the input vocabulary
         # Embedding dim is the same size as hidden dim
         self.embeddings = torch.nn.Embedding(input_size, hidden_dims)
 
@@ -201,7 +202,7 @@ def train(encoder, decoder,
         encoder_outputs[i] = output[0][0]
 
     # Run Decoder
-    decoder_hidden = decoder.init_hidden()
+    decoder_hidden = encoder_hidden
     start_token = Variable(torch.LongTensor([SOS]))
     prev_word = start_token
 
@@ -221,11 +222,87 @@ def train(encoder, decoder,
     encoder_optimizer.step()
     decoder_optimizer.step()
 
+    return loss / (i + 1)
+
+# encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
+# decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
+# criterion = torch.nn.NLLLoss()
+# encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=0.0005)
+# decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=0.0005)
+# traing_pair = prepare_pair(pairs[5], input_lang, output_lang)
+# 
+# print(train(encoder, decoder,
+#             encoder_optimizer, decoder_optimizer,
+#             criterion, traing_pair).data[0])
+# 
+# traing_pair = prepare_pair(pairs[9], input_lang, output_lang)
+# print(train(encoder, decoder,
+#             encoder_optimizer, decoder_optimizer,
+#             criterion, traing_pair).data[0])
+
+# Training Loop
+
 encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
 decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
 criterion = torch.nn.NLLLoss()
 encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=0.0005)
 decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=0.0005)
-traing_pair = prepare_pair(pairs[5], input_lang, output_lang)
 
-train(encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, traing_pair)
+print("Starting training with {} epochs".format(EPOCHS))
+for epoch in range(EPOCHS):
+    print("Epoch {}".format(epoch + 1))
+    epoch_losses = []
+    reporting_losses = 0
+    for i, pair in enumerate(pairs):
+        training_pair = prepare_pair(pair, input_lang, output_lang)
+        loss = train(encoder, decoder,
+                     encoder_optimizer, decoder_optimizer,
+                     criterion, training_pair)
+
+        reporting_losses += loss.data[0]
+        epoch_losses.append(loss.data[0])
+
+        if (i + 1) % PRINT_EVERY is 0:
+            print("Training loss is {}".format(reporting_losses / PRINT_EVERY))
+            reporting_losses = 0
+
+        # TEMPORARY HARD BREAK
+        if (i + 1) % 120 is 0:
+            print("Training Stopped!")
+            break
+
+def translate(sentence, encoder, decoder, input_lang, output_lang):
+    tokenized = normalize_string(sentence)
+    input_variable = sentence_to_variable(tokenized, input_lang)
+
+    encoder_outputs = Variable(torch.zeros(decoder.max_length, encoder.hidden_dims))
+    encoder_hidden = encoder.init_hidden()
+
+    for i, word in enumerate(input_variable):
+        encoder_out, encoder_hidden = encoder(word, encoder_hidden)
+        encoder_outputs[i] = encoder_out[0][0]
+    
+    decoder_hidden = encoder_hidden
+    prev_word = Variable(torch.LongTensor([SOS]))
+
+    result = ""
+
+    for i in range(decoder.max_length):
+        decoder_out, decoder_hidden = decoder(prev_word, decoder_hidden, encoder_outputs)
+        _, max_index = torch.max(decoder_out, 1)
+        max_index = max_index.data[0][0]
+
+        if max_index is EOS:
+            break
+        
+        prev_word = Variable(torch.LongTensor([max_index]))
+        result += output_lang.index2word[max_index] + " "
+
+    return result
+
+print("IN: I am very cold")
+print("OUT: {}".format(translate("I am very cold", encoder, decoder,
+                                 input_lang, output_lang)))
+print("IN: She is hungry")
+print("OUT: {}".format(translate("She is hungry", encoder, decoder,
+                                 input_lang, output_lang)))
