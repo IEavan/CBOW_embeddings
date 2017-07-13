@@ -6,6 +6,7 @@ import torch
 from torch.autograd import Variable
 
 # Constants
+USE_CUDA = torch.cuda.is_available()
 HIDDEN_DIMS = 256
 EPOCHS = 1
 PRINT_EVERY = 10
@@ -13,13 +14,13 @@ PATH = "name_data/eng-fra.txt"
 ALLOWED_CHARS = string.ascii_letters + " ,.!?'"
 MAX_TRAINING_LENGTH = 10
 ALLOWED_PREFIXES = (
-        "i am", "i m",
-        "you are", "you re",
-        "he is", "he s",
-        "she is", "she s",
-        "they are", "they re",
-        "we are", "we re",
-        "it is", "it s"
+    "i am", "i m",
+    "you are", "you re",
+    "he is", "he s",
+    "she is", "she s",
+    "they are", "they re",
+    "we are", "we re",
+    "it is", "it s"
 )
 
 # Reseverd Tokens
@@ -53,7 +54,7 @@ def read_data(reverse=False):
 
             if is_simple(pair):
                 pairs.append(pair)
-        
+
         if not reverse:
             input_lang = Lang("English")
             output_lang = Lang("French")
@@ -83,10 +84,10 @@ class Lang:
             self.word2index[word] = self.n_words
             self.index2word[self.n_words] = word
             self.word2count[word] = 1
+            self.n_words += 1
         else:
             self.word2count[word] += 1
-        
-        self.n_words += 1
+
 
     def add_sentence(self, sentence):
         for word in sentence.split(" "):
@@ -101,9 +102,6 @@ for pair in pairs:
     input_lang.add_sentence(pair[0])
     output_lang.add_sentence(pair[1])
 
-# print(pairs[:20])
-# print(input_lang.word2index["not"])
-# print(output_lang.word2index["mais"])
 
 # Define Encoder Network
 class Encoder(torch.nn.Module):
@@ -112,7 +110,7 @@ class Encoder(torch.nn.Module):
 
         self.input_size = input_size
         self.hidden_dims = hidden_dims
-        
+
         # Input size is the size of the input vocabulary
         # Embedding dim is the same size as hidden dim
         self.embeddings = torch.nn.Embedding(input_size, hidden_dims)
@@ -128,7 +126,10 @@ class Encoder(torch.nn.Module):
 
     def init_hidden(self):
         hidden = torch.zeros(1, 1, self.hidden_dims)
-        return Variable(hidden)
+        hidden = Variable(hidden)
+        if USE_CUDA:
+            return hidden.cuda()
+        return hidden
 
 # Define Decoder Network (with attention)
 class Decoder(torch.nn.Module):
@@ -165,6 +166,8 @@ class Decoder(torch.nn.Module):
 
     def init_hidden(self):
         hidden = Variable(torch.zeros(1,1,self.hidden_dims))
+        if USE_CUDA:
+            return hidden.cuda()
         return hidden
 
 # Data Preperation helper functions
@@ -175,6 +178,8 @@ def sentence_to_variable(sentence, lang):
     indicies = sentence_to_indicies(sentence, lang)
     indicies.append(EOS)
     variable = Variable(torch.LongTensor(indicies))
+    if USE_CUDA:
+        return variable.cuda()
     return variable
 
 def prepare_pair(pair, input_lang, output_lang):
@@ -184,8 +189,8 @@ def prepare_pair(pair, input_lang, output_lang):
 
 # Train Model
 def train(encoder, decoder,
-           encoder_optimizer, decoder_optimizer,
-           criterion, training_pair):
+          encoder_optimizer, decoder_optimizer,
+          criterion, training_pair):
 
     # Clear gradient buffers
     encoder_optimizer.zero_grad()
@@ -193,6 +198,8 @@ def train(encoder, decoder,
 
     # Establish tracking variables
     encoder_outputs = Variable(torch.zeros(decoder.max_length, encoder.hidden_dims))
+    if USE_CUDA:
+        encoder_outputs = encoder_outputs.cuda()
     loss = 0
 
     # Run Encoder
@@ -204,6 +211,8 @@ def train(encoder, decoder,
     # Run Decoder
     decoder_hidden = encoder_hidden
     start_token = Variable(torch.LongTensor([SOS]))
+    if USE_CUDA:
+        start_token = start_token.cuda()
     prev_word = start_token
 
     for i, word in enumerate(training_pair[1]):
@@ -211,6 +220,8 @@ def train(encoder, decoder,
         _, max_index = torch.max(output, 1)
         max_index = max_index.data[0][0]
         prev_word = Variable(torch.LongTensor([max_index]))
+        if USE_CUDA:
+            prev_word = prev_word.cuda()
 
         loss += criterion(output, word)
 
@@ -224,29 +235,17 @@ def train(encoder, decoder,
 
     return loss / (i + 1)
 
-# encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
-# decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
-# criterion = torch.nn.NLLLoss()
-# encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=0.0005)
-# decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=0.0005)
-# traing_pair = prepare_pair(pairs[5], input_lang, output_lang)
-# 
-# print(train(encoder, decoder,
-#             encoder_optimizer, decoder_optimizer,
-#             criterion, traing_pair).data[0])
-# 
-# traing_pair = prepare_pair(pairs[9], input_lang, output_lang)
-# print(train(encoder, decoder,
-#             encoder_optimizer, decoder_optimizer,
-#             criterion, traing_pair).data[0])
 
 # Training Loop
-
 encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
 decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
 criterion = torch.nn.NLLLoss()
 encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=0.0005)
 decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=0.0005)
+
+if USE_CUDA:
+    encoder = encoder.cuda()
+    decoder = decoder.cuda()
 
 print("Starting training with {} epochs".format(EPOCHS))
 for epoch in range(EPOCHS):
@@ -272,18 +271,27 @@ for epoch in range(EPOCHS):
             break
 
 def translate(sentence, encoder, decoder, input_lang, output_lang):
+    """ Runs the provided encoder and decoder to translate a string
+    from the input_lang to the output_lang provided that the encoder
+    and decoder are trained on that pairovided encoder and decoder to translate a string
+    from the input_lang to the output_lang provided that the encoder
+    and decoder are trained on that pair"""
     tokenized = normalize_string(sentence)
     input_variable = sentence_to_variable(tokenized, input_lang)
 
     encoder_outputs = Variable(torch.zeros(decoder.max_length, encoder.hidden_dims))
+    if USE_CUDA:
+        encoder_outputs = encoder_outputs.cuda()
     encoder_hidden = encoder.init_hidden()
 
     for i, word in enumerate(input_variable):
         encoder_out, encoder_hidden = encoder(word, encoder_hidden)
         encoder_outputs[i] = encoder_out[0][0]
-    
+
     decoder_hidden = encoder_hidden
     prev_word = Variable(torch.LongTensor([SOS]))
+    if USE_CUDA:
+        prev_word = prev_word.cuda()
 
     result = ""
 
@@ -294,8 +302,10 @@ def translate(sentence, encoder, decoder, input_lang, output_lang):
 
         if max_index is EOS:
             break
-        
+
         prev_word = Variable(torch.LongTensor([max_index]))
+        if USE_CUDA:
+            prev_word = prev_word.cuda()
         result += output_lang.index2word[max_index] + " "
 
     return result
