@@ -101,12 +101,12 @@ class Lang:
 # Read data into lang objects
 print("Reading Data...")
 input_lang, output_lang, pairs = read_data()
-shuffle(pairs)
 print("{} filtered training pairs loaded".format(len(pairs)))
 print("Indexing...")
 for pair in pairs:
     input_lang.add_sentence(pair[0])
     output_lang.add_sentence(pair[1])
+shuffle(pairs)
 
 
 # Define Encoder Network
@@ -249,8 +249,8 @@ def train(encoder, decoder,
 encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
 decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
 criterion = torch.nn.NLLLoss()
-encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=0.0005)
-decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=0.0005)
+encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=LEARNING_RATE)
+decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=LEARNING_RATE)
 
 if USE_CUDA:
     encoder = encoder.cuda()
