@@ -4,6 +4,7 @@ import re
 
 import torch
 from torch.autograd import Variable
+from random import shuffle
 
 # Constants
 USE_CUDA = torch.cuda.is_available()
@@ -25,6 +26,7 @@ ALLOWED_PREFIXES = (
 USE_SAVING = True
 ENCODER_PATH = "model_params/encoder"
 DECODER_PATH = "model_params/decoder"
+LEARNING_RATE = 1e-4
 
 # Reseverd Tokens
 SOS = 0  # Start of Sentence
@@ -99,6 +101,7 @@ class Lang:
 # Read data into lang objects
 print("Reading Data...")
 input_lang, output_lang, pairs = read_data()
+shuffle(pairs)
 print("{} filtered training pairs loaded".format(len(pairs)))
 print("Indexing...")
 for pair in pairs:
@@ -263,7 +266,7 @@ if USE_SAVING:
 
 print("Starting training with {} epochs".format(EPOCHS))
 for epoch in range(EPOCHS):
-    print("Epoch {}".format(epoch + 1))
+    print("Epoch {}\n\n".format(epoch + 1))
     epoch_losses = []
     reporting_losses = 0
     for i, pair in enumerate(pairs):
@@ -280,7 +283,7 @@ for epoch in range(EPOCHS):
             reporting_losses = 0
 
         # TEMPORARY HARD BREAK
-        if (i + 1) % 120 is 0:
+        if (i + 1) % 60 is 0:
             print("Training Stopped!")
             break
 
