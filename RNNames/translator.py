@@ -22,6 +22,9 @@ ALLOWED_PREFIXES = (
     "we are", "we re",
     "it is", "it s"
 )
+USE_SAVING = True
+ENCODER_PATH = "model_params/encoder"
+DECODER_PATH = "model_params/decoder"
 
 # Reseverd Tokens
 SOS = 0  # Start of Sentence
@@ -186,6 +189,9 @@ def prepare_pair(pair, input_lang, output_lang):
     return (sentence_to_variable(pair[0], input_lang),
             sentence_to_variable(pair[1], output_lang))
 
+def save_parameters(encoder, decoder, enc_path=ENCODER_PATH, dec_path=DECODER_PATH):
+    torch.save(encoder.state_dict(), enc_path)
+    torch.save(decoder.state_dict(), dec_path)
 
 # Train Model
 def train(encoder, decoder,
@@ -247,6 +253,14 @@ if USE_CUDA:
     encoder = encoder.cuda()
     decoder = decoder.cuda()
 
+if USE_SAVING:
+    try:
+        encoder.load_state_dict(torch.load(ENCODER_PATH))
+        decoder.load_state_dict(torch.load(DECODER_PATH))
+        print("Model parameters found and loaded")
+    except Exception:
+        print("No parameters where found")
+
 print("Starting training with {} epochs".format(EPOCHS))
 for epoch in range(EPOCHS):
     print("Epoch {}".format(epoch + 1))
@@ -269,6 +283,10 @@ for epoch in range(EPOCHS):
         if (i + 1) % 120 is 0:
             print("Training Stopped!")
             break
+
+if USE_SAVING:
+    print("Saving parameters")
+    save_parameters(encoder, decoder)
 
 def translate(sentence, encoder, decoder, input_lang, output_lang):
     """ Runs the provided encoder and decoder to translate a string
