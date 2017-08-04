@@ -1,16 +1,16 @@
+from random import shuffle, random
 import unicodedata
 import string
 import re
 
 import torch
 from torch.autograd import Variable
-from random import shuffle
 
 # Constants
 USE_CUDA = torch.cuda.is_available()
 HIDDEN_DIMS = 256
 EPOCHS = 1
-PRINT_EVERY = 10
+PRINT_EVERY = 100
 PATH = "name_data/eng-fra.txt"
 ALLOWED_CHARS = string.ascii_letters + " ,.!?'"
 MAX_TRAINING_LENGTH = 10
@@ -26,7 +26,8 @@ ALLOWED_PREFIXES = (
 USE_SAVING = True
 ENCODER_PATH = "model_params/encoder"
 DECODER_PATH = "model_params/decoder"
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-2
+BREAK_ITER = 1000
 
 # Reseverd Tokens
 SOS = 0  # Start of Sentence
@@ -101,11 +102,13 @@ class Lang:
 # Read data into lang objects
 print("Reading Data...")
 input_lang, output_lang, pairs = read_data()
+
 print("{} filtered training pairs loaded".format(len(pairs)))
 print("Indexing...")
 for pair in pairs:
     input_lang.add_sentence(pair[0])
     output_lang.add_sentence(pair[1])
+
 shuffle(pairs)
 
 
@@ -166,6 +169,7 @@ class Decoder(torch.nn.Module):
                                             encoder_outputs.unsqueeze(0))
         gru_input = self.attention_combine(torch.cat((focused_encoder_outputs[0],
                                                       embedded[0]), 1)).unsqueeze(0)
+        gru_input = self.relu(gru_input)
         gru_output, hidden = self.gru(gru_input, prev_hidden)
         probabilities = self.logsoftmax(self.out(gru_output[0]))
         return probabilities, hidden
@@ -228,7 +232,13 @@ def train(encoder, decoder,
         output, decoder_hidden = decoder(prev_word, decoder_hidden, encoder_outputs)
         _, max_index = torch.max(output, 1)
         max_index = max_index.data[0][0]
-        prev_word = Variable(torch.LongTensor([max_index]))
+
+        # Teacher forcing half the time
+        if random() > 0.5:
+            prev_word = word
+        else:
+            prev_word = Variable(torch.LongTensor([max_index]))
+
         if USE_CUDA:
             prev_word = prev_word.cuda()
 
@@ -249,8 +259,8 @@ def train(encoder, decoder,
 encoder = Encoder(input_lang.n_words, HIDDEN_DIMS)
 decoder = Decoder(output_lang.n_words, HIDDEN_DIMS, max_length=15)
 criterion = torch.nn.NLLLoss()
-encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=LEARNING_RATE)
-decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=LEARNING_RATE)
+encoder_optimizer = torch.optim.SGD(encoder.parameters(), lr=LEARNING_RATE)
+decoder_optimizer = torch.optim.SGD(decoder.parameters(), lr=LEARNING_RATE)
 
 if USE_CUDA:
     encoder = encoder.cuda()
@@ -261,7 +271,7 @@ if USE_SAVING:
         encoder.load_state_dict(torch.load(ENCODER_PATH))
         decoder.load_state_dict(torch.load(DECODER_PATH))
         print("Model parameters found and loaded")
-    except Exception:
+    except FileNotFoundError:
         print("No parameters where found")
 
 print("Starting training with {} epochs".format(EPOCHS))
@@ -283,7 +293,7 @@ for epoch in range(EPOCHS):
             reporting_losses = 0
 
         # TEMPORARY HARD BREAK
-        if (i + 1) % 60 is 0:
+        if (i + 1) % BREAK_ITER is 0:
             print("Training Stopped!")
             break
 
@@ -336,4 +346,13 @@ print("OUT: {}".format(translate("I am very cold", encoder, decoder,
                                  input_lang, output_lang)))
 print("IN: She is hungry")
 print("OUT: {}".format(translate("She is hungry", encoder, decoder,
+                                 input_lang, output_lang)))
+print("IN: I am stopping")
+print("OUT: {}".format(translate("I am stopping", encoder, decoder,
+                                 input_lang, output_lang)))
+print("IN: He can not control himself")
+print("OUT: {}".format(translate("He can not control himself", encoder, decoder,
+                                 input_lang, output_lang)))
+print("IN: It is falling apart")
+print("OUT: {}".format(translate("It is falling apart", encoder, decoder,
                                  input_lang, output_lang)))
