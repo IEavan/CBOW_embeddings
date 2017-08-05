@@ -27,7 +27,7 @@ USE_SAVING = True
 ENCODER_PATH = "model_params/encoder"
 DECODER_PATH = "model_params/decoder"
 LEARNING_RATE = 1e-2
-BREAK_ITER = 1000
+BREAK_ITER = 100000  # Use to stop after a certain number of iters in an epoch
 
 # Reseverd Tokens
 SOS = 0  # Start of Sentence
@@ -292,7 +292,6 @@ for epoch in range(EPOCHS):
             print("Training loss is {}".format(reporting_losses / PRINT_EVERY))
             reporting_losses = 0
 
-        # TEMPORARY HARD BREAK
         if (i + 1) % BREAK_ITER is 0:
             print("Training Stopped!")
             break
