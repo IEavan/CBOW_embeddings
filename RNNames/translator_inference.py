@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 class Model():
     def __init__(self):
-        self.input_lang, self.output_lang, _ = tc.read_data()
+        self.input_lang, self.output_lang, self.pairs = tc.read_data()
         self.encoder = tc.Encoder(self.input_lang.n_words, tc.HIDDEN_DIMS)
         self.decoder = tc.Decoder(self.output_lang.n_words,
                                   tc.HIDDEN_DIMS, max_length=15)
